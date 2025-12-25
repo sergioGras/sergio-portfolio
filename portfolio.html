@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
+    <title>Consola de Inversión 80/20 - Plan Maestro</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* Reset preventivo para evitar scroll horizontal */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background: #f4f7f9; 
+            color: #333; 
+            padding: 15px;
+            overflow-x: hidden; /* Garantiza que nada salga por los lados */
+            width: 100%;
+        }
+
+        .container { width: 100%; max-width: 1200px; margin: auto; }
+        
+        .header { text-align: center; margin-bottom: 25px; }
+        .header h1 { font-size: 1.5em; margin-bottom: 15px; color: #2c3e50; }
+
+        /* Banner optimizado para no desbordar */
+        .total-banner { 
+            display: flex; 
+            flex-direction: column; 
+            background: #2c3e50; 
+            color: white; 
+            padding: 20px; 
+            border-radius: 12px; 
+            margin-bottom: 20px;
+            gap: 15px;
+        }
+
+        .banner-item { text-align: center; width: 100%; }
+        .stat-label { font-size: 0.85em; opacity: 0.8; margin-bottom: 4px; text-transform: uppercase; }
+        .stat-val { font-size: 1.4em; font-weight: bold; display: block; }
+
+        .grid { display: grid; grid-template-columns: 1fr; gap: 20px; }
+
+        .card { 
+            background: white; 
+            padding: 15px; 
+            border-radius: 12px; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05); 
+            width: 100%;
+        }
+
+        h2 { border-bottom: 2px solid #eee; padding-bottom: 10px; margin-bottom: 15px; color: #2c3e50; font-size: 1.2em; }
+        
+        /* Gestión de Tabla vs Cards */
+        .table-container { display: none; } /* Oculta tabla por defecto (móvil primero) */
+        
+        .asset-card { 
+            background: #fff;
+            border: 1px solid #edf2f7;
+            border-radius: 10px; 
+            padding: 15px; 
+            margin-bottom: 12px;
+            word-break: break-word;
+        }
+
+        .asset-card-header { 
+            display: flex; 
+            justify-content: space-between; 
+            margin-bottom: 12px;
+            gap: 10px;
+        }
+
+        .asset-card-title { font-weight: bold; font-size: 1em; color: #2d3748; }
+
+        .asset-card-row { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center;
+            padding: 8px 0;
+            border-top: 1px solid #f7fafc;
+            font-size: 0.9em;
+        }
+
+        /* Botones adaptados */
+        .btn { 
+            width: 100%;
+            padding: 12px; 
+            border: none; 
+            border-radius: 8px; 
+            font-weight: bold; 
+            cursor: pointer;
+            margin-bottom: 10px;
+        }
+        .btn-primary { background: #3182ce; color: white; }
+        .btn-action { width: auto; padding: 6px 10px; margin: 0; }
+
+        /* Gráficos */
+        .chart-container { position: relative; height: 250px; width: 100%; margin-bottom: 30px; }
+
+        /* Modal Ultra-Responsive */
+        .modal { display: none; position: fixed; z-index: 9999; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); }
+        .modal-content { 
+            background: white; 
+            margin: 5% auto; 
+            padding: 20px; 
+            border-radius: 12px; 
+            width: 92%; 
+            max-height: 90vh; 
+            overflow-y: auto; 
+        }
+
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: 600; }
+        .form-group input, .form-group select { width: 100%; padding: 12px; border: 1px solid #e2e8f0; border-radius: 6px; }
+
+        /* Desktop View (Tablets y PCs) */
+        @media (min-width: 768px) {
+            body { padding: 30px; }
+            .total-banner { flex-direction: row; }
+            .grid { grid-template-columns: 350px 1fr; }
+            .table-container { display: block; overflow-x: auto; }
+            .asset-cards { display: none; }
+            .btn { width: auto; }
+            .header { display: flex; justify-content: space-between; align-items: center; text-align: left; }
+            .header h1 { margin: 0; }
+            table { width: 100%; border-collapse: collapse; }
+            th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }
+            th { cursor: pointer; background: #f8fafc; }
+        }
+
+        .tag { padding: 3px 8px; border-radius: 4px; font-size: 0.75em; font-weight: bold; }
+        .tag-core { background: #ebf8ff; color: #2b6cb0; }
+        .tag-sat { background: #fffaf0; color: #dd6b20; }
+        .tag-solid { background: #f0fff4; color: #38a169; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <h1>Mi Estrategia 80/20</h1>
+        <button class="btn btn-primary" onclick="openModal()">+ Añadir Activo</button>
+    </div>
+
+    <div class="total-banner" id="totalBanner"></div>
+
+    <div class="grid">
+        <div class="card">
+            <h2>Distribución</h2>
+            <div class="chart-container"><canvas id="categoryChart"></canvas></div>
+            <div class="chart-container"><canvas id="sourceChart"></canvas></div>
+        </div>
+
+        <div class="card">
+            <h2>Mis Activos</h2>
+            
+            <!-- Mobile View -->
+            <div id="assetCards" class="asset-cards"></div>
+
+            <!-- Desktop View -->
+            <div class="table-container">
+                <table id="assetTable">
+                    <thead>
+                        <tr>
+                            <th onclick="sortData('name')">Activo</th>
+                            <th onclick="sortData('source')">Origen</th>
+                            <th onclick="sortData('cat')">Cat.</th>
+                            <th onclick="sortData('val')">Valor</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody id="assetTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Form -->
+<div id="assetModal" class="modal">
+    <div class="modal-content">
+        <h2 id="modalTitle">Nuevo Activo</h2>
+        <form id="assetForm" onsubmit="saveAsset(event)">
+            <div class="form-group"><label>Nombre</label><input type="text" id="assetName" required></div>
+            <div class="form-group">
+                <label>Origen</label>
+                <select id="assetSource">
+                    <option value="DEGIRO">DEGIRO</option>
+                    <option value="Revolut">Revolut</option>
+                    <option value="Binance">Binance</option>
+                    <option value="Otro">Otro</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Categoría</label>
+                <select id="assetCat">
+                    <option value="Core">Core</option>
+                    <option value="Satélite">Satélite</option>
+                    <option value="Sólido">Sólido</option>
+                </select>
+            </div>
+            <div class="form-group"><label>Valor (€)</label><input type="number" step="0.01" id="assetVal" required></div>
+            <button type="submit" class="btn btn-primary">Guardar Cambios</button>
+            <button type="button" class="btn" style="background:#edf2f7" onclick="closeModal()">Cancelar</button>
+        </form>
+    </div>
+</div>
+
+<script>
+    let assets = JSON.parse(localStorage.getItem('invest_v3')) || [
+                { name: "Vanguard FTSE All-World", source: "DEGIRO", cat: "Core", val: 2605.68 },
+                { name: "Berkshire Hathaway", source: "DEGIRO", cat: "Core", val: 850.67 },
+                { name: "VanEck Defense (DFNS)", source: "DEGIRO", cat: "Satélite", val: 683.04 },
+                { name: "VanEck Rare Earths", source: "DEGIRO", cat: "Satélite", val: 563.22 },
+                { name: "NVIDIA Corp", source: "DEGIRO", cat: "Satélite", val: 480.05 },
+                { name: "L&G Clean Energy", source: "DEGIRO", cat: "Satélite", val: 451.00 },
+                { name: "Global Equity (IS3Q/EXI2)", source: "Revolut", cat: "Core", val: 2154.30 },
+                { name: "MSCI World IT (XDWT)", source: "Revolut", cat: "Satélite", val: 994.06 },
+                { name: "USA/Japan/EM/EU", source: "Revolut", cat: "Core", val: 1269.36 },
+                { name: "Bonos High Yield (IS3K)", source: "Revolut", cat: "Sólido", val: 481.52 },
+                { name: "Cash Revolut", source: "Revolut", cat: "Sólido", val: 100.61 },
+                { name: "Oro / Plata / Platino", source: "Revolut", cat: "Sólido", val: 1461.61 },
+                { name: "Bitcoin (BTC)", source: "Binance", cat: "Satélite", val: 945.42 },
+                { name: "Ethereum + BETH", source: "Binance", cat: "Satélite", val: 691.06 },
+                { name: "Binance Earn / Otros", source: "Binance", cat: "Satélite", val: 553.61 }
+            ];
+
+    let charts = {};
+    let editingIdx = -1;
+
+    function refresh() {
+        localStorage.setItem('invest_v3', JSON.stringify(assets));
+        renderUI();
+        updateCharts();
+    }
+
+    function renderUI() {
+        const total = assets.reduce((s, a) => s + a.val, 0);
+        const solid = assets.filter(a => a.cat === 'Sólido').reduce((s, a) => s + a.val, 0);
+        const solidPct = ((solid/total)*100).toFixed(1);
+
+        // Banner
+        document.getElementById('totalBanner').innerHTML = `
+            <div class="banner-item"><span class="stat-label">Patrimonio Total</span><span class="stat-val">${total.toLocaleString()} €</span></div>
+            <div class="banner-item"><span class="stat-label">Base Sólida (Objetivo 20%)</span><span class="stat-val" style="color:#81c784">${solidPct}%</span></div>
+            <div class="banner-item"><span class="stat-label">Renta Variable</span><span class="stat-val" style="color:#64b5f6">${(100-solidPct).toFixed(1)}%</span></div>
+        `;
+
+        // Cards & Table
+        const container = document.getElementById('assetCards');
+        const tbody = document.getElementById('assetTableBody');
+        container.innerHTML = '';
+        tbody.innerHTML = '';
+
+        assets.forEach((a, i) => {
+            const tagClass = `tag tag-${a.cat.toLowerCase().replace('é','e')}`;
+            
+            // Card móvil
+            container.innerHTML += `
+                <div class="asset-card">
+                    <div class="asset-card-header">
+                        <span class="asset-card-title">${a.name}</span>
+                        <div>
+                            <button class="btn-action" onclick="editAsset(${i})">✏️</button>
+                            <button class="btn-action" onclick="deleteAsset(${i})">🗑️</button>
+                        </div>
+                    </div>
+                    <div class="asset-card-row"><span>Origen</span><b>${a.source}</b></div>
+                    <div class="asset-card-row"><span>Cat.</span><span class="${tagClass}">${a.cat}</span></div>
+                    <div class="asset-card-row"><span>Valor</span><b onclick="quickEdit(${i})">${a.val.toLocaleString()} €</b></div>
+                </div>
+            `;
+
+            // Tabla desktop
+            tbody.innerHTML += `
+                <tr>
+                    <td>${a.name}</td>
+                    <td>${a.source}</td>
+                    <td><span class="${tagClass}">${a.cat}</span></td>
+                    <td onclick="quickEdit(${i})" style="cursor:pointer"><b>${a.val.toLocaleString()} €</b></td>
+                    <td>
+                        <button class="btn-action" onclick="editAsset(${i})">✏️</button>
+                        <button class="btn-action" onclick="deleteAsset(${i})">🗑️</button>
+                    </td>
+                </tr>
+            `;
+        });
+    }
+
+    function updateCharts() {
+        const cats = { Core: 0, Satélite: 0, Sólido: 0 };
+        const srcs = {};
+        assets.forEach(a => {
+            cats[a.cat] += a.val;
+            srcs[a.source] = (srcs[a.source] || 0) + a.val;
+        });
+
+        const config = (data, el) => {
+            if (charts[el]) charts[el].destroy();
+            charts[el] = new Chart(document.getElementById(el), {
+                type: el.includes('category') ? 'doughnut' : 'pie',
+                data: {
+                    labels: Object.keys(data),
+                    datasets: [{ data: Object.values(data), backgroundColor: ['#3182ce', '#dd6b20', '#38a169', '#718096'] }]
+                },
+                options: { 
+                    maintainAspectRatio: false, 
+                    plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } } } 
+                }
+            });
+        };
+
+        config(cats, 'categoryChart');
+        config(srcs, 'sourceChart');
+    }
+
+    // Funciones de gestión
+    function openModal() { editingIdx = -1; document.getElementById('assetForm').reset(); document.getElementById('assetModal').style.display='block'; }
+    function closeModal() { document.getElementById('assetModal').style.display='none'; }
+    
+    function saveAsset(e) {
+        e.preventDefault();
+        const obj = {
+            name: document.getElementById('assetName').value,
+            source: document.getElementById('assetSource').value,
+            cat: document.getElementById('assetCat').value,
+            val: parseFloat(document.getElementById('assetVal').value)
+        };
+        if (editingIdx > -1) assets[editingIdx] = obj;
+        else assets.push(obj);
+        closeModal();
+        refresh();
+    }
+
+    function editAsset(i) {
+        editingIdx = i;
+        const a = assets[i];
+        document.getElementById('assetName').value = a.name;
+        document.getElementById('assetSource').value = a.source;
+        document.getElementById('assetCat').value = a.cat;
+        document.getElementById('assetVal').value = a.val;
+        document.getElementById('assetModal').style.display='block';
+    }
+
+    function quickEdit(i) {
+        const n = prompt("Nuevo valor para " + assets[i].name, assets[i].val);
+        if (n !== null) { assets[i].val = parseFloat(n); refresh(); }
+    }
+
+    function deleteAsset(i) { if(confirm("¿Eliminar activo?")) { assets.splice(i, 1); refresh(); } }
+
+    function sortData(key) {
+        assets.sort((a,b) => typeof a[key] === 'string' ? a[key].localeCompare(b[key]) : b[key] - a[key]);
+        renderUI();
+    }
+
+    // Inicio
+    window.onload = refresh;
+    window.addEventListener('resize', updateCharts);
+</script>
+</body>
+</html>
