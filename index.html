@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
     <title>Consola de Inversión 80/20 - Plan Maestro</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         /* Reset preventivo para evitar scroll horizontal */
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -207,29 +208,44 @@
 </div>
 
 <script>
-    let assets = JSON.parse(localStorage.getItem('invest_v3')) || [
-                { name: "Vanguard FTSE All-World", source: "DEGIRO", cat: "Core", val: 2605.68 },
-                { name: "Berkshire Hathaway", source: "DEGIRO", cat: "Core", val: 850.67 },
-                { name: "VanEck Defense (DFNS)", source: "DEGIRO", cat: "Satélite", val: 683.04 },
-                { name: "VanEck Rare Earths", source: "DEGIRO", cat: "Satélite", val: 563.22 },
-                { name: "NVIDIA Corp", source: "DEGIRO", cat: "Satélite", val: 480.05 },
-                { name: "L&G Clean Energy", source: "DEGIRO", cat: "Satélite", val: 451.00 },
-                { name: "Global Equity (IS3Q/EXI2)", source: "Revolut", cat: "Core", val: 2154.30 },
-                { name: "MSCI World IT (XDWT)", source: "Revolut", cat: "Satélite", val: 994.06 },
-                { name: "USA/Japan/EM/EU", source: "Revolut", cat: "Core", val: 1269.36 },
-                { name: "Bonos High Yield (IS3K)", source: "Revolut", cat: "Sólido", val: 481.52 },
-                { name: "Cash Revolut", source: "Revolut", cat: "Sólido", val: 100.61 },
-                { name: "Oro / Plata / Platino", source: "Revolut", cat: "Sólido", val: 1461.61 },
-                { name: "Bitcoin (BTC)", source: "Binance", cat: "Satélite", val: 945.42 },
-                { name: "Ethereum + BETH", source: "Binance", cat: "Satélite", val: 691.06 },
-                { name: "Binance Earn / Otros", source: "Binance", cat: "Satélite", val: 553.61 }
-            ];
+    // CONFIGURACIÓN SUPABASE (Rellena con tus datos)
+    const SUPABASE_URL = 'https://srkwhattinvfzpqibfqf.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_3lkA4murY7uF0IIYz-vDcQ_r6gh_hkD';
+    const clientSupabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+    let assets = [];
     let charts = {};
     let editingIdx = -1;
 
-    function refresh() {
+    async function initData() {
+        const { data, error } = await clientSupabase
+            .from('jsonPortfolio') // Asegúrate de que este es el nombre de tu tabla
+            .select('data')
+            .eq('id', 1)
+            .single();
+
+        if (data) {
+            assets = data.data;
+            console.log("Datos sincronizados desde Supabase");
+        } else {
+            console.warn("Fallo carga nube, usando local:", error);
+            assets = JSON.parse(localStorage.getItem('invest_v3')) || [];
+        }
+        renderUI();
+        updateCharts();
+    }
+
+    async function syncCloud() {
         localStorage.setItem('invest_v3', JSON.stringify(assets));
+        
+        const { error } = await clientSupabase
+            .from('jsonPortfolio') // Mismo nombre que en initData
+            .update({ data: assets })
+            .eq('id', 1);
+
+        if (error) console.error("Error al sincronizar:", error);
+        else console.log("Sincronizado con la nube con éxito");
+        
         renderUI();
         updateCharts();
     }
@@ -237,16 +253,14 @@
     function renderUI() {
         const total = assets.reduce((s, a) => s + a.val, 0);
         const solid = assets.filter(a => a.cat === 'Sólido').reduce((s, a) => s + a.val, 0);
-        const solidPct = ((solid/total)*100).toFixed(1);
+        const solidPct = total > 0 ? ((solid/total)*100).toFixed(1) : 0;
 
-        // Banner
         document.getElementById('totalBanner').innerHTML = `
             <div class="banner-item"><span class="stat-label">Patrimonio Total</span><span class="stat-val">${total.toLocaleString()} €</span></div>
             <div class="banner-item"><span class="stat-label">Base Sólida (Objetivo 20%)</span><span class="stat-val" style="color:#81c784">${solidPct}%</span></div>
             <div class="banner-item"><span class="stat-label">Renta Variable</span><span class="stat-val" style="color:#64b5f6">${(100-solidPct).toFixed(1)}%</span></div>
         `;
 
-        // Cards & Table
         const container = document.getElementById('assetCards');
         const tbody = document.getElementById('assetTableBody');
         container.innerHTML = '';
@@ -254,8 +268,6 @@
 
         assets.forEach((a, i) => {
             const tagClass = `tag tag-${a.cat.toLowerCase().replace('é','e')}`;
-            
-            // Card móvil
             container.innerHTML += `
                 <div class="asset-card">
                     <div class="asset-card-header">
@@ -268,10 +280,8 @@
                     <div class="asset-card-row"><span>Origen</span><b>${a.source}</b></div>
                     <div class="asset-card-row"><span>Cat.</span><span class="${tagClass}">${a.cat}</span></div>
                     <div class="asset-card-row"><span>Valor</span><b onclick="quickEdit(${i})">${a.val.toLocaleString()} €</b></div>
-                </div>
-            `;
+                </div>`;
 
-            // Tabla desktop
             tbody.innerHTML += `
                 <tr>
                     <td>${a.name}</td>
@@ -282,8 +292,7 @@
                         <button class="btn-action" onclick="editAsset(${i})">✏️</button>
                         <button class="btn-action" onclick="deleteAsset(${i})">🗑️</button>
                     </td>
-                </tr>
-            `;
+                </tr>`;
         });
     }
 
@@ -295,26 +304,21 @@
             srcs[a.source] = (srcs[a.source] || 0) + a.val;
         });
 
-        const config = (data, el) => {
+        const setupChart = (data, el, type) => {
             if (charts[el]) charts[el].destroy();
             charts[el] = new Chart(document.getElementById(el), {
-                type: el.includes('category') ? 'doughnut' : 'pie',
+                type: type,
                 data: {
                     labels: Object.keys(data),
                     datasets: [{ data: Object.values(data), backgroundColor: ['#3182ce', '#dd6b20', '#38a169', '#718096'] }]
                 },
-                options: { 
-                    maintainAspectRatio: false, 
-                    plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } } } 
-                }
+                options: { maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } } } }
             });
         };
-
-        config(cats, 'categoryChart');
-        config(srcs, 'sourceChart');
+        setupChart(cats, 'categoryChart', 'doughnut');
+        setupChart(srcs, 'sourceChart', 'pie');
     }
 
-    // Funciones de gestión
     function openModal() { editingIdx = -1; document.getElementById('assetForm').reset(); document.getElementById('assetModal').style.display='block'; }
     function closeModal() { document.getElementById('assetModal').style.display='none'; }
     
@@ -329,7 +333,19 @@
         if (editingIdx > -1) assets[editingIdx] = obj;
         else assets.push(obj);
         closeModal();
-        refresh();
+        syncCloud();
+    }
+
+    function quickEdit(i) {
+        const n = prompt("Nuevo valor para " + assets[i].name, assets[i].val);
+        if (n !== null && !isNaN(n)) { assets[i].val = parseFloat(n); syncCloud(); }
+    }
+
+    function deleteAsset(i) { if(confirm("¿Eliminar activo?")) { assets.splice(i, 1); syncCloud(); } }
+
+    function sortData(key) {
+        assets.sort((a,b) => typeof a[key] === 'string' ? a[key].localeCompare(b[key]) : b[key] - a[key]);
+        renderUI();
     }
 
     function editAsset(i) {
@@ -342,20 +358,8 @@
         document.getElementById('assetModal').style.display='block';
     }
 
-    function quickEdit(i) {
-        const n = prompt("Nuevo valor para " + assets[i].name, assets[i].val);
-        if (n !== null) { assets[i].val = parseFloat(n); refresh(); }
-    }
-
-    function deleteAsset(i) { if(confirm("¿Eliminar activo?")) { assets.splice(i, 1); refresh(); } }
-
-    function sortData(key) {
-        assets.sort((a,b) => typeof a[key] === 'string' ? a[key].localeCompare(b[key]) : b[key] - a[key]);
-        renderUI();
-    }
-
-    // Inicio
-    window.onload = refresh;
+    // Inicializar cargando desde la nube
+    window.onload = initData;
     window.addEventListener('resize', updateCharts);
 </script>
 </body>
