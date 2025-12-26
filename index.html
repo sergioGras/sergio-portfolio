@@ -114,6 +114,45 @@
         .form-group label { display: block; margin-bottom: 5px; font-weight: 600; }
         .form-group input, .form-group select { width: 100%; padding: 12px; border: 1px solid #e2e8f0; border-radius: 6px; }
 
+                .tag-solid { background: #f0fff4; color: #38a169; }
+
+        /* Toggle Switch */
+        .toggle-container { 
+            display: flex; 
+            align-items: center; 
+            gap: 10px; 
+            margin-bottom: 15px;
+        }
+
+        .toggle-switch { 
+            position: relative; 
+            width: 50px; 
+            height: 26px; 
+            background: #ccc; 
+            border-radius: 13px; 
+            cursor: pointer; 
+            transition: background 0.3s;
+            flex-shrink: 0;
+        }
+
+        .toggle-switch.active { background: #3182ce; }
+
+        .toggle-slider { 
+            position: absolute; 
+            top: 3px; 
+            left: 3px; 
+            width: 20px; 
+            height: 20px; 
+            background: white; 
+            border-radius: 50%; 
+            transition: left 0.3s;
+            pointer-events: none;
+        }
+
+        .toggle-switch.active .toggle-slider { left: 24px; }
+
+        .toggle-label { font-size: 0.9em; color: #666; font-weight: 500; }
+
         /* Desktop View (Tablets y PCs) */
         @media (min-width: 768px) {
             body { padding: 30px; }
@@ -140,7 +179,15 @@
 <div class="container">
     <div class="header">
         <h1>Mi Estrategia 80/20</h1>
-        <button class="btn btn-primary" onclick="openModal()">+ Añadir Activo</button>
+        <div style="display: flex; gap: 15px; align-items: center;">
+            <div class="toggle-container">
+                <span class="toggle-label">Ocultar valores</span>
+                <div class="toggle-switch" id="hideValuesToggle" onclick="toggleHideValues()">
+                    <div class="toggle-slider"></div>
+                </div>
+            </div>
+            <button class="btn btn-primary" onclick="openModal()">+ Añadir Activo</button>
+        </div>
     </div>
 
     <div class="total-banner" id="totalBanner"></div>
@@ -216,8 +263,20 @@
     let assets = [];
     let charts = {};
     let editingIdx = -1;
+    let hideValues = false;
+
+    function toggleHideValues() {
+        hideValues = !hideValues;
+        document.getElementById('hideValuesToggle').classList.toggle('active');
+        localStorage.setItem('hideValues', hideValues);
+        renderUI();
+        updateCharts();
+    }
 
     async function initData() {
+        hideValues = localStorage.getItem('hideValues') === 'true';
+        if (hideValues) document.getElementById('hideValuesToggle').classList.add('active');
+
         const { data, error } = await clientSupabase
             .from('jsonPortfolio') // Asegúrate de que este es el nombre de tu tabla
             .select('data')
@@ -255,8 +314,11 @@
         const solid = assets.filter(a => a.cat === 'Sólido').reduce((s, a) => s + a.val, 0);
         const solidPct = total > 0 ? ((solid/total)*100).toFixed(1) : 0;
 
+        const displayVal = hideValues ? '***' : total.toLocaleString() + ' €';
+        const displaySolid = hideValues ? '***' : solid.toLocaleString() + ' €';
+
         document.getElementById('totalBanner').innerHTML = `
-            <div class="banner-item"><span class="stat-label">Patrimonio Total</span><span class="stat-val">${total.toLocaleString()} €</span></div>
+            <div class="banner-item"><span class="stat-label">Patrimonio Total</span><span class="stat-val">${displayVal}</span></div>
             <div class="banner-item"><span class="stat-label">Base Sólida (Objetivo 20%)</span><span class="stat-val" style="color:#81c784">${solidPct}%</span></div>
             <div class="banner-item"><span class="stat-label">Renta Variable</span><span class="stat-val" style="color:#64b5f6">${(100-solidPct).toFixed(1)}%</span></div>
         `;
@@ -268,6 +330,8 @@
 
         assets.forEach((a, i) => {
             const tagClass = `tag tag-${a.cat.toLowerCase().replace('é','e')}`;
+            const displayAssetVal = hideValues ? '***' : a.val.toLocaleString() + ' €';
+
             container.innerHTML += `
                 <div class="asset-card">
                     <div class="asset-card-header">
@@ -279,7 +343,7 @@
                     </div>
                     <div class="asset-card-row"><span>Origen</span><b>${a.source}</b></div>
                     <div class="asset-card-row"><span>Cat.</span><span class="${tagClass}">${a.cat}</span></div>
-                    <div class="asset-card-row"><span>Valor</span><b onclick="quickEdit(${i})">${a.val.toLocaleString()} €</b></div>
+                    <div class="asset-card-row"><span>Valor</span><b onclick="quickEdit(${i})" style="cursor:pointer">${displayAssetVal}</b></div>
                 </div>`;
 
             tbody.innerHTML += `
@@ -287,7 +351,7 @@
                     <td>${a.name}</td>
                     <td>${a.source}</td>
                     <td><span class="${tagClass}">${a.cat}</span></td>
-                    <td onclick="quickEdit(${i})" style="cursor:pointer"><b>${a.val.toLocaleString()} €</b></td>
+                    <td onclick="quickEdit(${i})" style="cursor:pointer"><b>${displayAssetVal}</b></td>
                     <td>
                         <button class="btn-action" onclick="editAsset(${i})">✏️</button>
                         <button class="btn-action" onclick="deleteAsset(${i})">🗑️</button>
