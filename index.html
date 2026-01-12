@@ -93,7 +93,20 @@
             margin-bottom: 10px;
         }
         .btn-primary { background: #3182ce; color: white; }
-        .btn-action { width: auto; padding: 6px 10px; margin: 0; }
+        .btn-action { 
+            width: auto; 
+            padding: 8px 12px; 
+            margin: 0 4px 0 0;
+            background: #f0f4f8;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85em;
+            transition: all 0.2s;
+        }
+        .btn-action:hover { background: #e2e8f0; border-color: #cbd5e0; }
+        .btn-action.edit::before { content: "✎"; margin-right: 4px; }
+        .btn-action.delete::before { content: "×"; margin-right: 4px; font-size: 1.2em; }
 
         /* Gráficos */
         .chart-container { position: relative; height: 250px; width: 100%; margin-bottom: 30px; }
@@ -337,8 +350,8 @@
                     <div class="asset-card-header">
                         <span class="asset-card-title">${a.name}</span>
                         <div>
-                            <button class="btn-action" onclick="editAsset(${i})">✏️</button>
-                            <button class="btn-action" onclick="deleteAsset(${i})">🗑️</button>
+                            <button class="btn-action edit" onclick="editAsset(${i})">Edit</button>
+                            <button class="btn-action delete" onclick="deleteAsset(${i})">Delete</button>
                         </div>
                     </div>
                     <div class="asset-card-row"><span>Origen</span><b>${a.source}</b></div>
@@ -353,8 +366,8 @@
                     <td><span class="${tagClass}">${a.cat}</span></td>
                     <td onclick="quickEdit(${i})" style="cursor:pointer"><b>${displayAssetVal}</b></td>
                     <td>
-                        <button class="btn-action" onclick="editAsset(${i})">✏️</button>
-                        <button class="btn-action" onclick="deleteAsset(${i})">🗑️</button>
+                        <button class="btn-action edit" onclick="editAsset(${i})">Edit</button>
+                        <button class="btn-action delete" onclick="deleteAsset(${i})">Delete</button>
                     </td>
                 </tr>`;
         });
@@ -370,13 +383,39 @@
 
         const setupChart = (data, el, type) => {
             if (charts[el]) charts[el].destroy();
+            const values = Object.values(data);
+            const total = values.reduce((a,b) => a+b, 0);
+            const percentages = values.map(v => ((v/total)*100).toFixed(1));
+            
             charts[el] = new Chart(document.getElementById(el), {
                 type: type,
                 data: {
                     labels: Object.keys(data),
-                    datasets: [{ data: Object.values(data), backgroundColor: ['#3182ce', '#dd6b20', '#38a169', '#718096'] }]
+                    datasets: [{ 
+                        data: values, 
+                        backgroundColor: ['#3182ce', '#dd6b20', '#38a169', '#718096'] 
+                    }]
                 },
-                options: { maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } } } }
+                options: { 
+                    maintainAspectRatio: false,
+                    plugins: { 
+                        legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } }
+                    }
+                },
+                plugins: [{
+                    afterDatasetsDraw(chart) {
+                        const { ctx } = chart;
+                        ctx.font = 'bold 13px sans-serif';
+                        ctx.fillStyle = 'white';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        
+                        chart.getDatasetMeta(0).data.forEach((datapoint, index) => {
+                            const { x, y } = datapoint.tooltipPosition();
+                            ctx.fillText(percentages[index] + '%', x, y);
+                        });
+                    }
+                }]
             });
         };
         setupChart(cats, 'categoryChart', 'doughnut');
